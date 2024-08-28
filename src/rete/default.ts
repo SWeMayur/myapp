@@ -86,6 +86,60 @@ class AddNode extends Classic.Node implements DataflowNode {
   }
 }
 
+class MultiplyNode extends Classic.Node implements DataflowNode {
+  width = 180;
+  height = 195;
+
+  constructor() {
+    super('Multiply');
+
+    this.addInput('a', new Classic.Input(socket, 'X'));
+    this.addOutput('value', new Classic.Output(socket, 'Number'));
+    this.addControl(
+      'result',
+      new Classic.InputControl('number', { initial: 1, readonly: true })
+    );
+  }
+  data(inputs: { a?: number[] }) {
+    const { a = []} = inputs;
+    const sum = 2 * (a[0] || 0);
+
+    (this.controls['result'] as Classic.InputControl<'number'>).setValue(sum);
+
+    return {
+      value: sum,
+    };
+  }
+}
+class SquareNode extends Classic.Node implements DataflowNode {
+  width = 180;
+  height = 195;
+
+  constructor() {
+    super('Square');
+
+    this.addInput('a', new Classic.Input(socket, 'X'));
+    this.addOutput('value', new Classic.Output(socket, 'Number'));
+    this.addControl(
+      'result',
+      new Classic.InputControl('number', { initial: 1, readonly: true })
+    );
+  }
+  data(inputs: { a?: number[] }) {
+    const { a = []} = inputs;
+    const sum = (a[0] || 0) * (a[0] || 0);
+
+    (this.controls['result'] as Classic.InputControl<'number'>).setValue(sum);
+
+    return {
+      value: sum,
+    };
+  }
+}
+
+
+
+
 type AreaExtra = Area2D<Schemes> | ReactArea2D<Schemes> | ContextMenuExtra;
 
 const socket = new Classic.Socket('socket');
@@ -100,6 +154,8 @@ export async function createEditor(container: HTMLElement) {
     items: ContextMenuPresets.classic.setup([
       ['Number', () => new NumberNode(1, process)],
       ['Add', () => new AddNode()],
+      ['Multiply', () => new MultiplyNode()],
+      ['Square', () => new SquareNode()],
     ]),
   });
 
@@ -121,13 +177,19 @@ export async function createEditor(container: HTMLElement) {
   const a = new NumberNode(1, process);
   const b = new NumberNode(1, process);
   const add = new AddNode();
+  const multiplyNode = new MultiplyNode();
+  const squareNode  = new SquareNode();
 
   await editor.addNode(a);
   await editor.addNode(b);
   await editor.addNode(add);
+  await editor.addNode(multiplyNode)
+  await editor.addNode(squareNode)
 
   await editor.addConnection(new Connection(a, 'value', add, 'a'));
   await editor.addConnection(new Connection(b, 'value', add, 'b'));
+  await editor.addConnection(new Connection(add, 'value', multiplyNode, 'a'));
+  await editor.addConnection(new Connection(a, 'value', squareNode, 'a'));
 
   const arrange = new AutoArrangePlugin<Schemes>();
 
@@ -151,7 +213,7 @@ export async function createEditor(container: HTMLElement) {
 
     editor
       .getNodes()
-      .filter((node) => node instanceof AddNode)
+      .filter((node) => node instanceof AddNode || MultiplyNode || SquareNode)
       .forEach(async (node) => {
         const sum = await dataflow.fetch(node.id);
 
