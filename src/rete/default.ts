@@ -86,6 +86,8 @@ class AddNode extends Classic.Node implements DataflowNode {
   }
 }
 
+
+
 class MultiplyNode extends Classic.Node implements DataflowNode {
   width = 180;
   height = 195;
@@ -111,6 +113,7 @@ class MultiplyNode extends Classic.Node implements DataflowNode {
     };
   }
 }
+
 class SquareNode extends Classic.Node implements DataflowNode {
   width = 180;
   height = 195;
@@ -138,8 +141,6 @@ class SquareNode extends Classic.Node implements DataflowNode {
 }
 
 
-
-
 type AreaExtra = Area2D<Schemes> | ReactArea2D<Schemes> | ContextMenuExtra;
 
 const socket = new Classic.Socket('socket');
@@ -155,7 +156,7 @@ export async function createEditor(container: HTMLElement) {
       ['Number', () => new NumberNode(1, process)],
       ['Add', () => new AddNode()],
       ['Multiply', () => new MultiplyNode()],
-      ['Square', () => new SquareNode()],
+      ['Square', () => new SquareNode()]
     ]),
   });
 
@@ -179,17 +180,21 @@ export async function createEditor(container: HTMLElement) {
   const add = new AddNode();
   const multiplyNode = new MultiplyNode();
   const squareNode  = new SquareNode();
+  // const normalNode = new NormalNode();
 
   await editor.addNode(a);
   await editor.addNode(b);
   await editor.addNode(add);
   await editor.addNode(multiplyNode)
   await editor.addNode(squareNode)
+  // await editor.addNode(normalNode)
 
   await editor.addConnection(new Connection(a, 'value', add, 'a'));
   await editor.addConnection(new Connection(b, 'value', add, 'b'));
   await editor.addConnection(new Connection(add, 'value', multiplyNode, 'a'));
   await editor.addConnection(new Connection(a, 'value', squareNode, 'a'));
+
+
 
   const arrange = new AutoArrangePlugin<Schemes>();
 
@@ -212,18 +217,19 @@ export async function createEditor(container: HTMLElement) {
     dataflow.reset();
 
     editor
-      .getNodes()
-      .filter((node) => node instanceof AddNode || MultiplyNode || SquareNode)
-      .forEach(async (node) => {
-        const sum = await dataflow.fetch(node.id);
+  .getNodes()
+  .filter((node) => node instanceof AddNode || node instanceof MultiplyNode || node instanceof SquareNode)
+  .forEach(async (node) => {
+    const resultControl = node.controls['result'];
+    if (resultControl && resultControl instanceof Classic.InputControl) {
+      const sum = await dataflow.fetch(node.id);
+      console.log(node.id, 'produces', sum);
+      area.update('control', resultControl.id);
+    } else {
+      console.warn(`Control 'result' not found or not an InputControl for node ${node.id}`);
+    }
+  });
 
-        console.log(node.id, 'produces', sum);
-
-        area.update(
-          'control',
-          (node.controls['result'] as Classic.InputControl<'number'>).id
-        );
-      });
   }
 
   editor.addPipe((context) => {
