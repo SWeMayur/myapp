@@ -24,11 +24,30 @@ import {
   Presets as ContextMenuPresets,
 } from 'rete-context-menu-plugin';
 
-type Node = NumberNode | AddNode;
+const readJson = async () => {
+  try {
+    const response = await fetch("./assets/functionData.json");
+    if (!response.ok) {
+      throw new Error("Network response was not ok");
+    }
+    const jsonData = await response.json();
+    console.log("jsonData : ", jsonData);
+    return jsonData;
+  } catch (error) {
+    console.error("Error fetching JSON data:", error);
+    throw error; // Re-throw the error if needed
+  }
+  return "";
+};
+
+type Node = NumberNode | CubeNode | SquareNode | MultiplyNode;
 type Conn =
-  | Connection<NumberNode, AddNode>
-  | Connection<AddNode, AddNode>
-  | Connection<AddNode, NumberNode>;
+  | Connection<NumberNode, MultiplyNode>
+  | Connection<NumberNode, SquareNode>
+  | Connection<NumberNode, CubeNode>
+  | Connection<MultiplyNode, SquareNode>
+  | Connection<MultiplyNode, CubeNode>
+  | Connection<SquareNode, CubeNode>
 type Schemes = GetSchemes<Node, Conn>;
 
 class Connection<A extends Node, B extends Node> extends Classic.Connection<
@@ -59,24 +78,23 @@ class NumberNode extends Classic.Node implements DataflowNode {
   }
 }
 
-class AddNode extends Classic.Node implements DataflowNode {
+class CubeNode extends Classic.Node implements DataflowNode {
   width = 180;
   height = 195;
 
   constructor() {
-    super('Add');
+    super('Cube');
 
     this.addInput('a', new Classic.Input(socket, 'A'));
-    this.addInput('b', new Classic.Input(socket, 'B'));
     this.addOutput('value', new Classic.Output(socket, 'Number'));
     this.addControl(
       'result',
       new Classic.InputControl('number', { initial: 0, readonly: true })
     );
   }
-  data(inputs: { a?: number[]; b?: number[] }) {
-    const { a = [], b = [] } = inputs;
-    const sum = (a[0] || 0) + (b[0] || 0);
+  data(inputs: { a?: number[]; }) {
+    const { a = [] } = inputs;
+    const sum = (a[0] || 0) * (a[0] || 0) * (a[0] || 0);
 
     (this.controls['result'] as Classic.InputControl<'number'>).setValue(sum);
 
@@ -87,7 +105,6 @@ class AddNode extends Classic.Node implements DataflowNode {
 }
 
 
-
 class MultiplyNode extends Classic.Node implements DataflowNode {
   width = 180;
   height = 195;
@@ -96,15 +113,16 @@ class MultiplyNode extends Classic.Node implements DataflowNode {
     super('Multiply');
 
     this.addInput('a', new Classic.Input(socket, 'X'));
+    this.addInput('b', new Classic.Input(socket, 'Y'));
     this.addOutput('value', new Classic.Output(socket, 'Number'));
     this.addControl(
       'result',
       new Classic.InputControl('number', { initial: 1, readonly: true })
     );
   }
-  data(inputs: { a?: number[] }) {
-    const { a = []} = inputs;
-    const sum = 2 * (a[0] || 0);
+  data(inputs: { a?: number[]; b?: number[] }) {
+    const { a = [], b = []} = inputs;
+    const sum = (a[0] || 0) * (b[0] || 0);
 
     (this.controls['result'] as Classic.InputControl<'number'>).setValue(sum);
 
@@ -154,9 +172,9 @@ export async function createEditor(container: HTMLElement) {
   const contextMenu = new ContextMenuPlugin<Schemes>({
     items: ContextMenuPresets.classic.setup([
       ['Number', () => new NumberNode(1, process)],
-      ['Add', () => new AddNode()],
       ['Multiply', () => new MultiplyNode()],
-      ['Square', () => new SquareNode()]
+      ['Square', () => new SquareNode()],
+      ['Cube', () => new CubeNode()]
     ]),
   });
 
@@ -175,24 +193,25 @@ export async function createEditor(container: HTMLElement) {
 
   editor.use(dataflow);
 
-  const a = new NumberNode(1, process);
-  const b = new NumberNode(1, process);
-  const add = new AddNode();
+  const numberNode1 = new NumberNode(1, process);
+  const numberNode2 = new NumberNode(1, process);
   const multiplyNode = new MultiplyNode();
   const squareNode  = new SquareNode();
-  // const normalNode = new NormalNode();
+  const cubeNode  = new CubeNode();
 
-  await editor.addNode(a);
-  await editor.addNode(b);
-  await editor.addNode(add);
+
+  readJson();
+
+  await editor.addNode(numberNode1);
+  await editor.addNode(numberNode2);
   await editor.addNode(multiplyNode)
   await editor.addNode(squareNode)
-  // await editor.addNode(normalNode)
+  await editor.addNode(cubeNode);
 
-  await editor.addConnection(new Connection(a, 'value', add, 'a'));
-  await editor.addConnection(new Connection(b, 'value', add, 'b'));
-  await editor.addConnection(new Connection(add, 'value', multiplyNode, 'a'));
-  await editor.addConnection(new Connection(a, 'value', squareNode, 'a'));
+  await editor.addConnection(new Connection(numberNode1, 'value', multiplyNode, 'a'));
+  await editor.addConnection(new Connection(numberNode2, 'value', multiplyNode, 'b'));
+  await editor.addConnection(new Connection(multiplyNode, 'value', squareNode, 'a'));
+  await editor.addConnection(new Connection(squareNode, 'value', cubeNode, 'a'));
 
 
 
@@ -218,7 +237,7 @@ export async function createEditor(container: HTMLElement) {
 
     editor
   .getNodes()
-  .filter((node) => node instanceof AddNode || node instanceof MultiplyNode || node instanceof SquareNode)
+  .filter((node) => node instanceof CubeNode || node instanceof MultiplyNode || node instanceof SquareNode || node instanceof CubeNode)
   .forEach(async (node) => {
     const resultControl = node.controls['result'];
     if (resultControl && resultControl instanceof Classic.InputControl) {

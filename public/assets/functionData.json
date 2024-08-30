@@ -1,0 +1,27 @@
+{
+  "functions": [
+    {
+      "name": "NumberNode",
+      "id": "input1"
+    },
+    {
+      "name": "NumberNode",
+      "id": "input2"
+    },
+    {
+      "name": "Multiply",
+      "params": ["input1", "input2"],
+      "id": "result1"
+    },
+    {
+      "name": "SquareNode",
+      "params": ["result1"],
+      "id": "result2"
+    },
+    {
+      "name": "CubeNode",
+      "params": ["result2"],
+      "id": "result3"
+    }
+  ]
+}
