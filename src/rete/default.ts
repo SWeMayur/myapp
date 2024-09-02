@@ -40,7 +40,7 @@ const readJson = async () => {
   return "";
 };
 
-type Node = NumberNode | CubeNode | SquareNode | MultiplyNode;
+type Node = NumberNode | CubeNode | SquareNode | MultiplyNode | TextNode;
 type Conn =
   | Connection<NumberNode, MultiplyNode>
   | Connection<NumberNode, SquareNode>
@@ -105,6 +105,7 @@ class CubeNode extends Classic.Node implements DataflowNode {
 }
 
 
+
 class MultiplyNode extends Classic.Node implements DataflowNode {
   width = 180;
   height = 195;
@@ -158,6 +159,30 @@ class SquareNode extends Classic.Node implements DataflowNode {
   }
 }
 
+class TextNode extends Classic.Node implements DataflowNode {
+  width = 180;
+  height = 120;
+  
+  constructor(initial: string, change?: (value: string) => void) {
+    super('Text');
+
+    this.addOutput('value', new Classic.Output(socket, 'Text'));
+    this.addControl(
+      'value',
+      new Classic.InputControl('text', { initial, change })
+    );
+  }
+  data() {
+    const value = (this.controls['value'] as Classic.InputControl<'text'>)
+      .value;
+
+    return {
+      value,
+    };
+  }
+}
+
+
 
 type AreaExtra = Area2D<Schemes> | ReactArea2D<Schemes> | ContextMenuExtra;
 
@@ -198,15 +223,17 @@ export async function createEditor(container: HTMLElement) {
   const multiplyNode = new MultiplyNode();
   const squareNode  = new SquareNode();
   const cubeNode  = new CubeNode();
+  const textNode = new TextNode("text", process);
 
 
-  readJson();
+  // readJson();
 
   await editor.addNode(numberNode1);
   await editor.addNode(numberNode2);
   await editor.addNode(multiplyNode)
   await editor.addNode(squareNode)
   await editor.addNode(cubeNode);
+  await editor.addNode(textNode);
 
   await editor.addConnection(new Connection(numberNode1, 'value', multiplyNode, 'a'));
   await editor.addConnection(new Connection(numberNode2, 'value', multiplyNode, 'b'));
@@ -232,25 +259,66 @@ export async function createEditor(container: HTMLElement) {
 
   AreaExtensions.selectableNodes(area, selector, { accumulating });
 
-  async function process() {
-    dataflow.reset();
+  
+// Define an interface for the JSON object
+interface WorkflowJson {
+  [key: string]: number;
+}
 
-    editor
-  .getNodes()
-  .filter((node) => node instanceof CubeNode || node instanceof MultiplyNode || node instanceof SquareNode || node instanceof CubeNode)
-  .forEach(async (node) => {
+// Function to create and print JSON representation
+async function createWorkflowJson(editor: NodeEditor<Schemes>) {
+  const nodes = editor.getNodes();
+  const json: WorkflowJson = {}; // Use the defined interface
+
+  for (const node of nodes) {
+    const nodeTitle = node.id; // Use 'title' instead of 'name'
     const resultControl = node.controls['result'];
+
     if (resultControl && resultControl instanceof Classic.InputControl) {
-      const sum = await dataflow.fetch(node.id);
-      console.log(node.id, 'produces', sum);
-      area.update('control', resultControl.id);
+      const resultValue = resultControl.value;
+      json[nodeTitle] = resultValue;
     } else {
       console.warn(`Control 'result' not found or not an InputControl for node ${node.id}`);
     }
-  });
-
   }
 
+  console.log('Workflow JSON:', JSON.stringify(json, null, 2));
+}
+
+// Update process function and ensure it's called appropriately
+async function process() {
+  dataflow.reset();
+
+  editor
+    .getNodes()
+    .filter((node) => node instanceof CubeNode || node instanceof MultiplyNode || node instanceof SquareNode || node instanceof TextNode)
+    .forEach(async (node) => {
+      const resultControl = node.controls['result'];
+      if (resultControl && resultControl instanceof Classic.InputControl) {
+        const sum = await dataflow.fetch(node.id);
+        console.log(node.id, 'produces', sum);
+        area.update('control', resultControl.id);
+      } else {
+        console.warn(`Control 'result' not found or not an InputControl for node ${node.id}`);
+      }
+    });
+
+  await createWorkflowJson(editor);  // Call the function to print JSON
+}
+
+editor.addPipe((context) => {
+  if (
+    context.type === 'connectioncreated' ||
+    context.type === 'connectionremoved'
+  ) {
+    process();
+  }
+  return context;
+});
+
+process();
+
+  // Ensure `process` function is called appropriately
   editor.addPipe((context) => {
     if (
       context.type === 'connectioncreated' ||
@@ -260,10 +328,6 @@ export async function createEditor(container: HTMLElement) {
     }
     return context;
   });
-
+  
   process();
-
-  return {
-    destroy: () => area.destroy(),
-  };
 }
